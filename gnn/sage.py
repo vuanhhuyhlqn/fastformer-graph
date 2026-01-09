@@ -3,10 +3,10 @@ import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv
 
 class GraphSAGEX(nn.Module):
-    def __init__(self, nfeat, nhid, nclass, dropout, nlayer=3):
+    def __init__(self, nfeat, nhid, dropout, nlayer=3):
         super(GraphSAGEX, self).__init__()
         self.conv1 = SAGEConv(nfeat, nhid)
-        self.conv2 = SAGEConv(nhid, nclass)
+        self.conv2 = SAGEConv(nhid, nhid)
         self.convx = nn.ModuleList([SAGEConv(nhid, nhid) for _ in range(nlayer - 2)])
         self.dropout_p = dropout
 
@@ -42,6 +42,6 @@ class GraphSAGEX(nn.Module):
 
         return x
     
-def create_sage(nfeat, nhid, nclass, dropout, nlayer):
-    model = GraphSAGEX(nfeat, nhid, nclass, dropout, nlayer)
+def create_sage(nfeat, nhid, dropout, nlayer):
+    model = GraphSAGEX(nfeat, nhid, dropout, nlayer)
     return model
