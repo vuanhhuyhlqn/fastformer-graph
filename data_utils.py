@@ -26,8 +26,8 @@ def build_user_id_map(data_path='data/MINDsmall_train/'):
     with open(data_path + 'user_id_map.pkl', 'wb') as f:
         pickle.dump(user_id_map, f)
 
-def build_news_token(news_id_map, data_path='data/MINDsmall_train/', max_len=128):
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+def build_news_token(news_id_map, data_path='data/MINDsmall_train/', max_len=64):
+    tokenizer = BertTokenizer.from_pretrained('huawei-noah/TinyBERT_General_4L_312D')
     news_df = pd.read_csv(data_path + 'news.tsv', sep='\t', header=None)
     raw_data = {
         row[0]: str(row[3]) + " " + tokenizer.sep_token + " " + str(row[4]) 
@@ -135,3 +135,17 @@ def collate_fn(batch):
         'label': labels,
         'seed_nodes': seed_nodes
     }
+
+@torch.no_grad()
+def precompute_bert_features(bert_model, news_tokens, device):
+    bert_model.to(device).eval()
+    all_bert_outputs = []
+    
+    for i in tqdm(range(0, len(news_tokens), 64)): # Batch size nhỏ vì 768 dim khá nặng
+        batch = torch.tensor(news_tokens[i:i+64]).to(device)
+        mask = (batch != 0).long()
+        # Lấy hidden state cuối cùng của BERT
+        out = bert_model(batch, attention_mask=mask).last_hidden_state # [64, 128, 768]
+        all_bert_outputs.append(out.cpu()) # Đẩy về RAM (Cần khoảng 10-20GB RAM máy)
+        
+    return torch.cat(all_bert_outputs, dim=0) # [Tổng_số_bài, 128, 312]
