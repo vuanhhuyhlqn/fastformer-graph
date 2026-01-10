@@ -2,3 +2,6 @@ data/
 analysis.ipynb
 edge_index.pt
 bert_features.pt
+test.ipynb
+train.ipynb
+behaviors.pkl
