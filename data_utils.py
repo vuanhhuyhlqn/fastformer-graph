@@ -136,6 +136,36 @@ def collate_fn(batch):
 		'seed_nodes': seed_nodes
 	}
 
+def valid_collate_fn(batch):
+    user_idxs = torch.stack([item['user_idx'] for item in batch])
+    histories = torch.stack([item['history'] for item in batch])
+    
+    # Lấy list các tensor
+    cand_list = [torch.tensor(item['candidates'], dtype=torch.long) for item in batch]
+    label_list = [torch.tensor(item['labels'], dtype=torch.float32) for item in batch]
+    
+    # Padding cho candidates (để model không bị shock kích thước)
+    padded_cands = torch.nn.utils.rnn.pad_sequence(cand_list, batch_first=True, padding_value=0)
+    padded_labels = torch.nn.utils.rnn.pad_sequence(label_list, batch_first=True, padding_value=-1)
+
+    # --- SỬA CHỖ NÀY ĐỂ HẾT TYPEERROR ---
+    all_news_tensors = []
+    for item in batch:
+        # Chuyển mọi thứ về 1D tensor trước khi gom
+        all_news_tensors.append(item['history'].view(-1)) 
+        all_news_tensors.append(torch.tensor(item['candidates'], dtype=torch.long).view(-1))
+    
+    # Nối tất cả lại thành 1 tensor duy nhất, sau đó lấy duy nhất
+    seed_nodes = torch.unique(torch.cat(all_news_tensors))
+
+    return {
+        'user_idx': user_idxs,
+        'history': histories,
+        'candidates': padded_cands,
+        'labels': padded_labels,
+        'seed_nodes': seed_nodes # Đảm bảo đây là 1D LongTensor
+    }
+
 @torch.no_grad()
 def precompute_bert_features(bert_model, news_tokens, device):
 	bert_model.to(device).eval()

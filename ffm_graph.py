@@ -14,9 +14,8 @@ class NewsEncoder(nn.Module):
     def forward(self, news_ids, token_ids, device):
         news_ids_cpu = news_ids.cpu()
 
-        x = self.bert_features[news_ids_cpu].to(device)
+        x = self.bert_features[news_ids_cpu].to(device).float()
         mask = (token_ids != 0).long().to(device)
-
         word_vecs = self.project(x) # [num_nodes, 128, 256]
         news_vec = self.fastformer(word_vecs, attention_mask=mask) # [num_nodes, 256]
 
@@ -60,6 +59,36 @@ class Fastformer_Graph(nn.Module):
 
         return scores
 
+class Fastformer_Graph_Lite(nn.Module):
+    def __init__(self, news_encoder, gnn):
+        super().__init__()
+        self.news_encoder = news_encoder
+        self.gnn = gnn
+    
+    def forward(self, batch, sub_graph, device):
+        news_emb = self.news_encoder(sub_graph.n_id, sub_graph.x, device) # [num_nodes, 128] -> [num_nodes, 256]
+        struct_emb = self.gnn(news_emb, sub_graph.edge_index)
+
+        x = news_emb + struct_emb
+
+        max_id = sub_graph.n_id.max() + 1
+        news_lookup = torch.zeros(max_id, x.size(1)).to(device)
+        news_lookup[sub_graph.n_id] = x
+
+        history_embs = news_lookup[batch['history']] # [batch, 32, 256]
+        history_mask = (batch['history'] != 0) 
+
+        cand_embs = news_lookup[batch['candidates']]
+
+        sum_embs = torch.sum(history_embs * history_mask.unsqueeze(-1), dim=1) # [batch, dim]
+    
+        num_read = history_mask.sum(dim=1).unsqueeze(-1)
+        num_read = torch.clamp(num_read, min=1e-9) 
+        
+        user_vec = sum_embs / num_read # [batch, dim]
+        scores = torch.bmm(cand_embs, user_vec.unsqueeze(-1)).squeeze(-1)
+
+        return scores
 
 
 
